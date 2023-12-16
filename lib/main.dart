@@ -9,21 +9,23 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   // cameras= await availableCameras();
-  runApp(const MyApp());
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
-    return FlutterSizer
-    (builder: (context, orientation, screenType)=> MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primaryColor: Colors.black87,
-      ),
-      home: const HomeScannerPage(),
-    ),);
+    return FlutterSizer(
+      builder: (BuildContext, Orientation, ScreenType) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'Image Upload',
+          theme: ThemeData(
+            primarySwatch: Colors.blue,
+          ),
+          home: HomeScannerPage(),
+        );
+      },
+    );
   }
 }
