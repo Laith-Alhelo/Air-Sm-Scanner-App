@@ -1,4 +1,4 @@
-import 'package:barcode_app/views/screens/home_scanner_page.dart';
+import 'package:Sea_Sm/views/screens/home_scanner_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_sizer/flutter_sizer.dart';
 import 'package:firebase_core/firebase_core.dart';

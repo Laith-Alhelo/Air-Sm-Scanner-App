@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:Sea_Sm/views/widgets/drawer.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -11,7 +12,6 @@ import 'dart:io';
 class ImageFolder {
   String folderName;
   List<File> images;
-
   ImageFolder(this.folderName, this.images);
 }
 
@@ -28,7 +28,7 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
   bool _showButton = false;
   String? scanResult;
   bool _uploading = false;
-  Color backColor = const Color(0xFF8B0000);
+  Color backColor =  const Color(0xFF8B0000);
   List<BoxShadow> myShadowList = const [
     BoxShadow(
       blurRadius: 0,
@@ -41,7 +41,7 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
   Future<void> openCameraAndGetImage(String folderName) async {
     var imgPicked = await imagePicker.pickImage(
       source: ImageSource.camera,
-      imageQuality: 60,
+      imageQuality: 20,
     );
     if (imgPicked != null) {
       File file = File(imgPicked.path);
@@ -71,12 +71,20 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
     final FirebaseStorage storage = FirebaseStorage.instance;
 
     for (var folder in imageFolders) {
-      final Reference ref = storage.ref().child(folder.folderName);
       folder.images.asMap().forEach((index, image) async {
-        Random random = Random(10000000000);
-
+        Random random = Random(1000);
+      final Reference ref;
+      if(scanResult?.length==5){
+        ref = storage.ref().child('Sea SM').child(folder.folderName);
+      }
+      else{
+        ref = storage.ref().child('Air SM').child(folder.folderName);
+      }
+      // else{
+      //   continue;
+      // }
         // String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-        String imageName = 'image_$random-${DateTime.now()}.jpg';
+        String imageName = 'image_ - ${DateTime.now()}.jpg';
 
         UploadTask task = ref.child(imageName).putFile(image);
 
@@ -121,8 +129,8 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
       setState(() {});
       return;
     }
-    if (scanResult.contains('-1') && scanResult.length != 7) return;
-    if(scanResult.length>7||scanResult.length<7){
+    if ((scanResult.contains('-1'))||(scanResult.length != 7&&scanResult.length!=5)) return;
+    if((scanResult.length!=5)&&(scanResult.length!=7)){
       ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Center(child: Text('wrong parcode')),
@@ -139,6 +147,9 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
     setState(() {
       this.scanResult = scanResult;
     });
+    if (!scanResult.contains('-1') && scanResult.length == 5) {
+      await openCameraAndGetImage(scanResult);
+    }
     if (!scanResult.contains('-1') && scanResult.length == 7) {
       await openCameraAndGetImage(scanResult);
     }
@@ -158,11 +169,12 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
     return WillPopScope(
       onWillPop: () => _onBackPressed(context),
       child: Scaffold(
+        drawer: MyDrawer(),
         appBar: _showButton == false
             ? AppBar(
                 backgroundColor: backColor,
                 title: const Text(
-                  'Air SM',
+                  'Photo SM',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               )
@@ -466,17 +478,17 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Air SM',
+                              'Photo SM',
                               style: TextStyle(
-                                fontSize: 27.sp,
+                                fontSize: 25.sp,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.black,
                               ),
                             ),
                             Text(
-                              'Photo For Air Shipment',
+                              'Photo For Sea & Air Shipment',
                               style: TextStyle(
-                                fontSize: 17.sp,
+                                fontSize: 16.sp,
                                 // fontWeight: FontWeight.bold,
                                 color: Colors.black87,
                               ),
@@ -492,10 +504,6 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
                           ),
                           child: MaterialButton(
                             onPressed: () {
-                              // final player = AudioPlayer();
-                              // player.play(AssetSource(
-                              //     'assets/audio/store-scanner-beep-90395.mp3'));
-
                               barcodeScannerShow();
                             },
                             child: Text(
@@ -519,5 +527,4 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
       ),
     );
   }
-  /////////////////
 }
