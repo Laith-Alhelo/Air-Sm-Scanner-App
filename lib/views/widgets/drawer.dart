@@ -1,4 +1,5 @@
-import 'package:Sea_Sm/views/screens/search_folders_page.dart';
+import 'package:Sea_Sm/views/screens/search_air_folders_page.dart';
+import 'package:Sea_Sm/views/screens/search_sea_folders_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_sizer/flutter_sizer.dart';
 
@@ -53,7 +54,7 @@ class MyDrawer extends StatelessWidget {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => SearchAirFoldersPage()),
+                MaterialPageRoute(builder: (context) => SearchSeaFoldersPage()),
               );
             },
           ),

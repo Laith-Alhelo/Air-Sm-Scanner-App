@@ -23,12 +23,14 @@ class HomeScannerPage extends StatefulWidget {
 }
 
 class _HomeScannerPageState extends State<HomeScannerPage> {
+  int numbereOfImages = 0;
+  bool _downloading = false;
   List<ImageFolder> imageFolders = [];
   var imagePicker = ImagePicker();
   bool _showButton = false;
   String? scanResult;
   bool _uploading = false;
-  Color backColor =  const Color(0xFF8B0000);
+  Color backColor = const Color(0xFF8B0000);
   List<BoxShadow> myShadowList = const [
     BoxShadow(
       blurRadius: 0,
@@ -55,6 +57,7 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
       );
       setState(() {
         folder.images.add(file);
+        numbereOfImages++;
         _showButton = true;
       });
       await openCameraAndGetImage(folderName); // Open camera again
@@ -64,54 +67,72 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
   }
 
   Future<void> uploadImageFolders(BuildContext context) async {
-    setState(() {
-      _uploading = true;
-    });
-
     final FirebaseStorage storage = FirebaseStorage.instance;
+    int folderindex = imageFolders.length;
+    int folderNum = 1;
+    setState(() {
+      _downloading = true;
+    });
+    try {
+      for (ImageFolder folder in imageFolders) {
+        folder.images.asMap().forEach((index, image) async {
+          Random random = Random(10000);
+          final Reference ref;
+          if (scanResult?.length == 5) {
+            ref = storage.ref().child('Sea SM').child(folder.folderName);
+          } else {
+            ref = storage.ref().child('Air SM').child(folder.folderName);
+          }
+          // else{
+          //   continue;
+          // }
+          // String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+          String imageName = 'image_ - ${DateTime.now()}.jpg';
 
-    for (var folder in imageFolders) {
-      folder.images.asMap().forEach((index, image) async {
-        Random random = Random(1000);
-      final Reference ref;
-      if(scanResult?.length==5){
-        ref = storage.ref().child('Sea SM').child(folder.folderName);
-      }
-      else{
-        ref = storage.ref().child('Air SM').child(folder.folderName);
-      }
-      // else{
-      //   continue;
-      // }
-        // String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-        String imageName = 'image_ - ${DateTime.now()}.jpg';
+          UploadTask task = ref.child(imageName).putFile(image);
+          numbereOfImages--;
+          print('number of images $numbereOfImages (inside nested for loob)');
 
-        UploadTask task = ref.child(imageName).putFile(image);
-
-        try {
           await task;
           print('Uploaded $index out of ${folder.images.length}');
 
-          // Remove the uploaded image from the list
-          setState(() {
-            folder.images.removeAt(index);
-          });
-        } on FirebaseException catch (e) {
-          print('Error uploading image: $e');
-        }
+          if (folder.images.length - index == 1) {
+            setState(() {
+              print('uploading to false:');
+              _downloading = false;
+              showUploadCompleteSnackbar(folderNum++);
+            });
+          }
+          folder.images.removeAt(index);
+
+          // // Remove the uploaded image from the list
+          // setState(() {
+          //   folder.images.removeAt(index);
+          //   if(folder.images.isEmpty){
+          //     print('folder.images.length: ${folder.images.length}');
+          //     imageFolders.remove(folder);
+          //   }
+          //   if (imageFolders.isEmpty) {
+          //     _downloading = false;
+          //   }
+          // });
+        });
+
+        // yRemove the uploaded image from the list
+        print('Upload completed for ${folder.folderName}');
+        folderindex--;
+        print('Indexzxxxxxxx $folderindex');
+      }
+
+      print('Out side for loop');
+
+      setState(() {
+        _showButton = false;
       });
-
-      print('Upload completed for ${folder.folderName}');
+    } catch (e) {
+      print('Error uploading image: $e');
     }
-
-    setState(() {
-      _showButton = false;
-      _uploading = false;
-      imageFolders.clear();
-    });
-
-    showUploadCompleteSnackbar();
-  } 
+  }
 
   Future<void> barcodeScannerShow() async {
     String scanResult;
@@ -122,46 +143,53 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
         true,
         ScanMode.BARCODE,
       );
-    } on Exception catch (e) { 
+    } on Exception catch (e) {
+      print('scanner error $e');
       scanResult = 'failed to get the barcode: $e';
     }
     if (!mounted) {
       setState(() {});
       return;
     }
-    if ((scanResult.contains('-1'))||(scanResult.length != 7&&scanResult.length!=5)) return;
-    if((scanResult.length!=5)&&(scanResult.length!=7)){
-      ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Center(child: Text('wrong parcode')),
-        duration: const Duration(seconds: 3),
-        margin: EdgeInsets.only(bottom: 70.h),
-      ),
-    );
-      return;
-    }
-    
+    await openCameraAndGetImage(scanResult);
+    // if ((scanResult.contains('-1')) ||
+    //     (scanResult.length != 7 && scanResult.length != 5)) return;
+    // if ((scanResult.length != 5) && (scanResult.length != 7)) {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     SnackBar(
+    //       content: const Center(child: Text('wrong parcode')),
+    //       duration: const Duration(seconds: 3),
+    //       margin: EdgeInsets.only(bottom: 70.h),
+    //     ),
+    //   );
+    //   return;
+    // }
 
-    final player = AudioPlayer();
-    player.play(AssetSource('audio/store-scanner-beep-90395.mp3'));
-    setState(() {
-      this.scanResult = scanResult;
-    });
-    if (!scanResult.contains('-1') && scanResult.length == 5) {
-      await openCameraAndGetImage(scanResult);
-    }
-    if (!scanResult.contains('-1') && scanResult.length == 7) {
-      await openCameraAndGetImage(scanResult);
-    }
+    // final player = AudioPlayer();
+    // player.play(AssetSource('audio/store-scanner-beep-90395.mp3'));
+    // setState(() {
+    //   this.scanResult = scanResult;
+    // });
+    // if (!scanResult.contains('-1') && scanResult.length == 5) {
+    //   await openCameraAndGetImage(scanResult);
+    // }
+    // if (!scanResult.contains('-1') && scanResult.length == 7) {
+    //   await openCameraAndGetImage(scanResult);
+    // }
   } // end barcode function
 
-  void showUploadCompleteSnackbar() {
+  void showUploadCompleteSnackbar(int index) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Center(child: Text('upload completed')),
+      SnackBar(
+        content: Center(child: Text('Folder $index has been uploaded.')),
         duration: Duration(seconds: 2),
       ),
     );
+  }
+
+  int getUploadingTime() {
+    double uploadingTime = (numbereOfImages * 3.5) / 60;
+    return uploadingTime.floor();
   }
 
   @override
@@ -177,39 +205,33 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
                   'Photo SM',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
+                actions: [
+                  if (_downloading)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Row(
+                        children: [
+                          if (getUploadingTime() > 1)
+                            Text(
+                              'uploading may take ${getUploadingTime()}min',
+                            ),
+                          if (getUploadingTime() < 1)
+                            const Text(
+                              'uploading may take few sec',
+                            ),
+                          const CircularProgressIndicator(
+                            color: Colors.yellow,
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               )
             : null,
         body: Stack(
           children: [
             homeUi(),
             if (_showButton) showMultibleFolders(),
-            if (_uploading)
-              Center(
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    color: backColor.withOpacity(.5),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'uploading..',
-                        style: TextStyle(
-                          fontSize: 17.sp,
-                          color: backColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(
-                        width: 15,
-                      ),
-                      const CircularProgressIndicator(),
-                    ],
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -282,6 +304,10 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
                                   } else if (imageFolders.length > 1) {
                                     setState(() {
                                       imageFolders.remove(imageFolders[index]);
+                                      numbereOfImages -=
+                                          imageFolders[index].images.length;
+                                      print(
+                                          'number of images: $numbereOfImages');
                                     });
                                   }
                                 },
@@ -354,6 +380,7 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
                     child: MaterialButton(
                       onPressed: () async {
                         await uploadImageFolders(context);
+                        print('finish uploading()((((()))))');
                       },
                       child: Text(
                         'Upload Folders',

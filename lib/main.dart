@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_sizer/flutter_sizer.dart';
 import 'package:firebase_core/firebase_core.dart';
 // import 'package:camera/camera.dart';
-
 // late List<CameraDescription> cameras;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -1,8 +1,10 @@
 import 'package:Sea_Sm/views/screens/show_full_image.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:flutter_sizer/flutter_sizer.dart';
 import 'package:gallery_saver/gallery_saver.dart';
 import 'package:path_provider/path_provider.dart';
@@ -17,6 +19,7 @@ class SearchAirFoldersPage extends StatefulWidget {
 class _SearchAirFoldersPageState extends State<SearchAirFoldersPage> {
   Color backColor = const Color(0xFF8B0000);
   late Future<ListResult> futureFiles;
+  bool beforeAnySearch = true;
   List allFoldersName = [];
   List filteredFolders = [];
   bool viewFilteredFoldersName = false;
@@ -24,6 +27,57 @@ class _SearchAirFoldersPageState extends State<SearchAirFoldersPage> {
   TextEditingController _folderNameController = TextEditingController();
 
   String AirfolderFiles = '';
+
+  Future<void> barcodeScannerShow() async {
+    String scanResult;
+    try {
+      scanResult = await FlutterBarcodeScanner.scanBarcode(
+        '#ff6666',
+        'cancel',
+        true,
+        ScanMode.BARCODE,
+      );
+    } on Exception catch (e) {
+      scanResult = 'failed to get the barcode: $e';
+    }
+    if (!mounted) {
+      return ;
+    }
+    if ((scanResult.contains('-1')) ||
+        (scanResult.length != 7 && scanResult.length != 5)) {
+      // ScaffoldMessenger.of(context).showSnackBar(
+      //   SnackBar(
+      //     content: const Center(child: Text('try take parcode again')),
+      //     duration: const Duration(seconds: 3),
+      //     margin: EdgeInsets.only(bottom: 70.h),
+      //   ),
+      // );
+
+      return;
+    }
+    if ((scanResult.length != 5) && (scanResult.length != 7)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Center(child: Text('wrong parcode')),
+          duration: const Duration(seconds: 3),
+          margin: EdgeInsets.only(bottom: 70.h),
+        ),
+      );
+      return;
+    }
+
+    final player = AudioPlayer();
+    player.play(AssetSource('audio/store-scanner-beep-90395.mp3'));
+    beforeAnySearch = false;
+    viewFilteredFoldersName = false;
+    searched = true;
+    AirfolderFiles = scanResult;
+    _folderNameController.clear;
+    FocusScope.of(context).unfocus();
+    futureFiles = FirebaseStorage.instance.ref('/Air SM/$scanResult').listAll();
+    setState(() {});
+    
+  } // end barcode function
 
   @override
   void initState() {
@@ -57,7 +111,21 @@ class _SearchAirFoldersPageState extends State<SearchAirFoldersPage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: backColor,
-        title: Text('search file'),
+        title: const Text('Air shipments search'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: IconButton(
+                onPressed: () {
+                  barcodeScannerShow();
+                },
+                icon: const Icon(
+                  Icons.barcode_reader,
+                  size: 30,
+                  color: Colors.black87,
+                )),
+          )
+        ],
       ),
       body: Column(
         children: [
@@ -69,20 +137,43 @@ class _SearchAirFoldersPageState extends State<SearchAirFoldersPage> {
                 if (searched) {
                   searched = false;
                 }
-                viewFilteredFoldersName = true;
-                filterFolders(value);
+                if (value.isNotEmpty) {
+                  viewFilteredFoldersName = true;
+                  filterFolders(value);
+                } else {
+                  filteredFolders.clear();
+                  viewFilteredFoldersName = false;
+                  setState(() {});
+                }
               },
               onSubmitted: (value) {
-                viewFilteredFoldersName = false;
-                searched = true;
-                AirfolderFiles = value;
-                _folderNameController.clear;
-                FocusScope.of(context).unfocus();
-                futureFiles =
-                    FirebaseStorage.instance.ref('/Air SM/$value').listAll();
-                setState(() {});
+                if (_folderNameController.text.isNotEmpty) {
+                  beforeAnySearch = false;
+                  viewFilteredFoldersName = false;
+                  searched = true;
+                  AirfolderFiles = value;
+                  _folderNameController.clear;
+                  FocusScope.of(context).unfocus();
+                  futureFiles =
+                      FirebaseStorage.instance.ref('/Air SM/$value').listAll();
+                  setState(() {});
+                }
               },
               decoration: InputDecoration(
+                suffixIcon: IconButton(
+                  onPressed: () {
+                    if (viewFilteredFoldersName) {
+                      viewFilteredFoldersName = false;
+                      _folderNameController.clear;
+                      FocusScope.of(context).unfocus();
+                      setState(() {});
+                    }
+                  },
+                  icon: const Icon(
+                    Icons.cancel,
+                    color: Colors.black,
+                  ),
+                ),
                 labelText: 'Enter Folder Name',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
@@ -95,8 +186,9 @@ class _SearchAirFoldersPageState extends State<SearchAirFoldersPage> {
             ),
           ),
           if (viewFilteredFoldersName)
-            SizedBox(
-              height: 250,
+            Container(
+              color: backColor.withOpacity(.5),
+              height: 300,
               child: ListView.builder(
                   itemCount: filteredFolders.length,
                   itemBuilder: (context, index) {
@@ -104,14 +196,17 @@ class _SearchAirFoldersPageState extends State<SearchAirFoldersPage> {
                       padding: const EdgeInsets.all(8.0),
                       child: GestureDetector(
                         onTap: () {
-                          viewFilteredFoldersName = false;
-                          searched=true;
-                          AirfolderFiles = filteredFolders[index];
-                          _folderNameController.clear;
-                          FocusScope.of(context).unfocus();
-                          futureFiles = FirebaseStorage.instance
-                              .ref('/Air SM/${filteredFolders[index]}')
-                              .listAll();
+                          if (_folderNameController.text.isNotEmpty) {
+                            viewFilteredFoldersName = false;
+                            beforeAnySearch = false;
+                            searched = true;
+                            AirfolderFiles = filteredFolders[index];
+                            _folderNameController.clear;
+                            FocusScope.of(context).unfocus();
+                            futureFiles = FirebaseStorage.instance
+                                .ref('/Air SM/${filteredFolders[index]}')
+                                .listAll();
+                          }
                           setState(() {});
                         },
                         // ignore: deprecated_member_use
@@ -123,13 +218,31 @@ class _SearchAirFoldersPageState extends State<SearchAirFoldersPage> {
                     );
                   }),
             ),
-          if (searched && AirfolderFiles.isNotEmpty&&filteredFolders.isEmpty)
+          if (searched && AirfolderFiles.isNotEmpty && filteredFolders.isEmpty)
             Expanded(
               child: Center(
-                child: Text('The folder $AirfolderFiles is not exist', style: TextStyle(
-                  fontSize: 25.sp,
-                ),),
+                child: Text(
+                  'The folder $AirfolderFiles is not exist',
+                  style: TextStyle(
+                    fontSize: 25.sp,
+                  ),
+                ),
               ),
+            ),
+          if (AirfolderFiles.isNotEmpty)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                const SizedBox(
+                  width: 20,
+                ),
+                Text(
+                  AirfolderFiles,
+                  style: const TextStyle(
+                    fontSize: 30,
+                  ),
+                ),
+              ],
             ),
           AirfolderFiles.isNotEmpty
               ? Expanded(
