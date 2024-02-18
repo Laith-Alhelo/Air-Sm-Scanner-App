@@ -24,6 +24,7 @@ class HomeScannerPage extends StatefulWidget {
 
 class _HomeScannerPageState extends State<HomeScannerPage> {
   int numbereOfImages = 0;
+  int imageUploadedNumber=0;
   bool _downloading = false;
   List<ImageFolder> imageFolders = [];
   var imagePicker = ImagePicker();
@@ -68,71 +69,49 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
 
   Future<void> uploadImageFolders(BuildContext context) async {
     final FirebaseStorage storage = FirebaseStorage.instance;
-    int folderindex = imageFolders.length;
     int folderNum = 1;
     setState(() {
       _downloading = true;
     });
+
+    // Create a copy of the imageFolders list
+    // List<ImageFolder> foldersCopy = List.from(imageFolders);
+
     try {
       for (ImageFolder folder in imageFolders) {
-        folder.images.asMap().forEach((index, image) async {
-          Random random = Random(10000);
+        for (var image in folder.images) {
           final Reference ref;
           if (scanResult?.length == 5) {
             ref = storage.ref().child('Sea SM').child(folder.folderName);
           } else {
             ref = storage.ref().child('Air SM').child(folder.folderName);
           }
-          // else{
-          //   continue;
-          // }
-          // String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-          String imageName = 'image_ - ${DateTime.now()}.jpg';
+          String imageName = 'image_${DateTime.now()}.jpg';
 
-          UploadTask task = ref.child(imageName).putFile(image);
-          numbereOfImages--;
-          print('number of images $numbereOfImages (inside nested for loob)');
+          await ref.child(imageName).putFile(image);
+          print('-----------image uploaded------------');
+          // folder.images.remove(image);
+          setState(() {
+            numbereOfImages--;
+          });
 
-          await task;
-          print('Uploaded $index out of ${folder.images.length}');
-
-          if (folder.images.length - index == 1) {
+          if (folder.images.isEmpty) {
             setState(() {
-              print('uploading to false:');
-              _downloading = false;
               showUploadCompleteSnackbar(folderNum++);
             });
           }
-          folder.images.removeAt(index);
+        }
 
-          // // Remove the uploaded image from the list
-          // setState(() {
-          //   folder.images.removeAt(index);
-          //   if(folder.images.isEmpty){
-          //     print('folder.images.length: ${folder.images.length}');
-          //     imageFolders.remove(folder);
-          //   }
-          //   if (imageFolders.isEmpty) {
-          //     _downloading = false;
-          //   }
-          // });
-        });
-
-        // yRemove the uploaded image from the list
-        print('Upload completed for ${folder.folderName}');
-        folderindex--;
-        print('Indexzxxxxxxx $folderindex');
+        imageFolders.remove(folder);
       }
-
-      print('Out side for loop');
-
-      setState(() {
-        _showButton = false;
-      });
     } catch (e) {
       print('Error uploading image: $e');
     }
-  }
+    setState(() {
+      _downloading = false;
+      _showButton = false;
+    });
+  } // end upload method
 
   Future<void> barcodeScannerShow() async {
     String scanResult;
@@ -205,33 +184,48 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
                   'Photo SM',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-                actions: [
-                  if (_downloading)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Row(
-                        children: [
-                          if (getUploadingTime() > 1)
-                            Text(
-                              'uploading may take ${getUploadingTime()}min',
-                            ),
-                          if (getUploadingTime() < 1)
-                            const Text(
-                              'uploading may take few sec',
-                            ),
-                          const CircularProgressIndicator(
-                            color: Colors.yellow,
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
               )
             : null,
         body: Stack(
           children: [
             homeUi(),
             if (_showButton) showMultibleFolders(),
+            if (_downloading)
+              Center(
+                child: Container(
+                  width: double.infinity,
+                  margin: EdgeInsets.symmetric(horizontal: 20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                'Downloading..',
+                                style: TextStyle(fontSize: 16.sp),
+                              ),
+                              Text(
+                                '$imageUploadedNumber/$numbereOfImages',
+                                style: TextStyle(fontSize: 15.sp, color: backColor),
+                              ),
+                            ],
+                          ),
+                          SizedBox(
+                            width: 300,
+                            child: LinearProgressIndicator(
+                              minHeight: 2,
+                              value: numbereOfImages.toDouble(),
+                            ),
+                          )
+                        ],
+                      ),
+                    
+                  
+                ),
+              ),
           ],
         ),
       ),
@@ -300,6 +294,7 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
                                       _showButton = false;
                                       _uploading = false;
                                       imageFolders.clear();
+                                      numbereOfImages = 0;
                                     });
                                   } else if (imageFolders.length > 1) {
                                     setState(() {
