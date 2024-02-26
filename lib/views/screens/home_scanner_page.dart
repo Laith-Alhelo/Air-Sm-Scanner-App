@@ -1,13 +1,12 @@
-import 'dart:math';
+import 'dart:io';
+
 import 'package:Sea_Sm/views/widgets/drawer.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_sizer/flutter_sizer.dart';
 import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
+import 'package:flutter_sizer/flutter_sizer.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'package:percent_indicator/circular_percent_indicator.dart';
 
 class ImageFolder {
   String folderName;
@@ -24,13 +23,14 @@ class HomeScannerPage extends StatefulWidget {
 
 class _HomeScannerPageState extends State<HomeScannerPage> {
   int numbereOfImages = 0;
-  int imageUploadedNumber=0;
+  int imageUploadedNumber = 0;
   bool _downloading = false;
   List<ImageFolder> imageFolders = [];
   var imagePicker = ImagePicker();
   bool _showButton = false;
   String? scanResult;
   bool _uploading = false;
+  double _uploadProgress=0;
   Color backColor = const Color(0xFF8B0000);
   List<BoxShadow> myShadowList = const [
     BoxShadow(
@@ -40,6 +40,7 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
       // offset: Offset(.1, 0),
     ),
   ];
+  
 
   Future<void> openCameraAndGetImage(String folderName) async {
     var imgPicked = await imagePicker.pickImage(
@@ -68,50 +69,60 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
   }
 
   Future<void> uploadImageFolders(BuildContext context) async {
-    final FirebaseStorage storage = FirebaseStorage.instance;
-    int folderNum = 1;
-    setState(() {
-      _downloading = true;
-    });
+  final FirebaseStorage storage = FirebaseStorage.instance;
+  int folderNum = 1;
+  setState(() {
+    _downloading = true;
+  });
 
-    // Create a copy of the imageFolders list
-    // List<ImageFolder> foldersCopy = List.from(imageFolders);
-
-    try {
-      for (ImageFolder folder in imageFolders) {
-        for (var image in folder.images) {
-          final Reference ref;
-          if (scanResult?.length == 5) {
-            ref = storage.ref().child('Sea SM').child(folder.folderName);
-          } else {
-            ref = storage.ref().child('Air SM').child(folder.folderName);
-          }
-          String imageName = 'image_${DateTime.now()}.jpg';
-
-          await ref.child(imageName).putFile(image);
-          print('-----------image uploaded------------');
-          // folder.images.remove(image);
-          setState(() {
-            numbereOfImages--;
-          });
-
-          if (folder.images.isEmpty) {
-            setState(() {
-              showUploadCompleteSnackbar(folderNum++);
-            });
-          }
-        }
-
-        imageFolders.remove(folder);
-      }
-    } catch (e) {
-      print('Error uploading image: $e');
+  try {
+    int totalImages = 0;
+    for (ImageFolder folder in imageFolders) {
+      totalImages += folder.images.length;
     }
-    setState(() {
-      _downloading = false;
-      _showButton = false;
-    });
-  } // end upload method
+
+    int uploadedImages = 0;
+
+    for (ImageFolder folder in imageFolders) {
+      List<dynamic> imagesCopy = List.from(folder.images); // Create a copy of the list
+
+      for (var image in imagesCopy) {
+        final Reference ref = scanResult?.length == 5
+            ? storage.ref().child('Sea SM').child(folder.folderName)
+            : storage.ref().child('Air SM').child(folder.folderName);
+        String imageName = 'image_${DateTime.now()}.jpg';
+
+        await ref.child(imageName).putFile(image);
+
+          setState(() {
+            _uploadProgress =
+                (++uploadedImages / totalImages).clamp(0.0, 1.0);
+            imageUploadedNumber++;
+            folder.images.remove(image);
+          });
+        
+
+        // await uploadTask;
+
+        if (folder.images.isEmpty) {
+          showUploadCompleteSnackbar(folderNum++);
+        }
+      }
+
+      imageFolders.remove(folder);
+    }
+  } catch (e) {
+    print('Error uploading image: $e');
+  }
+  setState(() {
+    _downloading = false;
+    _showButton = false;
+    _uploadProgress=0;
+    imageUploadedNumber=0;
+    numbereOfImages=0;
+  });
+}
+
 
   Future<void> barcodeScannerShow() async {
     String scanResult;
@@ -193,37 +204,44 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
             if (_downloading)
               Center(
                 child: Container(
+                  height: 150,
                   width: double.infinity,
                   margin: EdgeInsets.symmetric(horizontal: 20),
                   decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(.6),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                'Downloading..',
-                                style: TextStyle(fontSize: 16.sp),
-                              ),
-                              Text(
-                                '$imageUploadedNumber/$numbereOfImages',
-                                style: TextStyle(fontSize: 15.sp, color: backColor),
-                              ),
-                            ],
-                          ),
-                          SizedBox(
-                            width: 300,
-                            child: LinearProgressIndicator(
-                              minHeight: 2,
-                              value: numbereOfImages.toDouble(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            const SizedBox(width: 15,),
+                            Text(
+                              'Downloading..',
+                              style: TextStyle(fontSize: 16.sp),
                             ),
-                          )
-                        ],
-                      ),
-                    
-                  
+                            Text(
+                              '$imageUploadedNumber/$numbereOfImages',
+                              style: TextStyle(fontSize: 15.sp, color: backColor),
+                            ),
+                          ],
+                        ),
+                        CircularPercentIndicator(
+                          radius: 40.0,
+                          lineWidth: 7.0,
+                          percent: _uploadProgress,
+                          animation: true,
+                          animationDuration: 300,
+                          center: Text('${(_uploadProgress * 100).toInt()}%'),
+                          backgroundColor: Colors.grey,
+                          progressColor: backColor,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
           ],
