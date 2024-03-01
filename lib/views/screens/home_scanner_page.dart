@@ -1,12 +1,18 @@
 import 'dart:io';
 
+import 'package:Sea_Sm/layouts/notification_progress.dart';
 import 'package:Sea_Sm/views/widgets/drawer.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:flutter_sizer/flutter_sizer.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
+
+// double notificationProgress=0;
+Color backColor = const Color(0xFF8B0000);
 
 class ImageFolder {
   String folderName;
@@ -29,9 +35,8 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
   var imagePicker = ImagePicker();
   bool _showButton = false;
   String? scanResult;
-  bool _uploading = false;
-  double _uploadProgress=0;
-  Color backColor = const Color(0xFF8B0000);
+  bool _isPaused = false;
+  double _uploadProgress = 0;
   List<BoxShadow> myShadowList = const [
     BoxShadow(
       blurRadius: 0,
@@ -40,7 +45,6 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
       // offset: Offset(.1, 0),
     ),
   ];
-  
 
   Future<void> openCameraAndGetImage(String folderName) async {
     var imgPicked = await imagePicker.pickImage(
@@ -69,60 +73,64 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
   }
 
   Future<void> uploadImageFolders(BuildContext context) async {
-  final FirebaseStorage storage = FirebaseStorage.instance;
-  int folderNum = 1;
-  setState(() {
-    _downloading = true;
-  });
+    final FirebaseStorage storage = FirebaseStorage.instance;
+    NotificationController.showCustomNotification(
+        progress: _uploadProgress, imageuploaded: imageUploadedNumber, numbereOfImages: numbereOfImages);
+    int folderNum = 1;
+    setState(() {
+      _downloading = true;
+    });
+    try {
+      int totalImages = 0;
+      for (ImageFolder folder in imageFolders) {
+        totalImages += folder.images.length;
+      }
+      int uploadedImages = 0;
 
-  try {
-    int totalImages = 0;
-    for (ImageFolder folder in imageFolders) {
-      totalImages += folder.images.length;
-    }
-
-    int uploadedImages = 0;
-
-    for (ImageFolder folder in imageFolders) {
-      List<dynamic> imagesCopy = List.from(folder.images); // Create a copy of the list
-
-      for (var image in imagesCopy) {
-        final Reference ref = scanResult?.length == 5
-            ? storage.ref().child('Sea SM').child(folder.folderName)
-            : storage.ref().child('Air SM').child(folder.folderName);
-        String imageName = 'image_${DateTime.now()}.jpg';
-
-        await ref.child(imageName).putFile(image);
-
+      for (ImageFolder folder in imageFolders) {
+        List<dynamic> imagesCopy =
+            List.from(folder.images); // Create a copy of the list
+        // await AwesomeNotifications().cancelAll();
+        for (var image in imagesCopy) {
+          final Reference ref = scanResult?.length == 5
+              ? storage.ref().child('Sea SM').child(folder.folderName)
+              : storage.ref().child('Air SM').child(folder.folderName);
+          String imageName = 'image_${DateTime.now()}.jpg';
+          if(_isPaused)return;
+          await ref.child(imageName).putFile(image);
           setState(() {
-            _uploadProgress =
-                (++uploadedImages / totalImages).clamp(0.0, 1.0);
+            _uploadProgress = (++uploadedImages / totalImages).clamp(0.0, 1.0);
+            // notificationProgress=_uploadProgress;
             imageUploadedNumber++;
+            NotificationController.showCustomNotification(
+                progress: _uploadProgress,
+                imageuploaded: imageUploadedNumber,
+                numbereOfImages: numbereOfImages);
             folder.images.remove(image);
           });
-        
 
-        // await uploadTask;
+          // await uploadTask;
 
-        if (folder.images.isEmpty) {
-          showUploadCompleteSnackbar(folderNum++);
+          if (folder.images.isEmpty) {
+            showUploadCompleteSnackbar(folderNum++);
+          }
         }
+
+        imageFolders.remove(folder);
       }
-
-      imageFolders.remove(folder);
+    } catch (e) {
+      print('Error uploading image: $e');
     }
-  } catch (e) {
-    print('Error uploading image: $e');
+    setState(() {
+      AwesomeNotifications().cancel(1);
+      NotificationController.showCompleteNotification();
+      _downloading = false;
+      _showButton = false;
+      _uploadProgress = 0;
+      imageUploadedNumber = 0;
+      numbereOfImages = 0;
+    });
   }
-  setState(() {
-    _downloading = false;
-    _showButton = false;
-    _uploadProgress=0;
-    imageUploadedNumber=0;
-    numbereOfImages=0;
-  });
-}
-
 
   Future<void> barcodeScannerShow() async {
     String scanResult;
@@ -141,31 +149,31 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
       setState(() {});
       return;
     }
-    await openCameraAndGetImage(scanResult);
-    // if ((scanResult.contains('-1')) ||
-    //     (scanResult.length != 7 && scanResult.length != 5)) return;
-    // if ((scanResult.length != 5) && (scanResult.length != 7)) {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     SnackBar(
-    //       content: const Center(child: Text('wrong parcode')),
-    //       duration: const Duration(seconds: 3),
-    //       margin: EdgeInsets.only(bottom: 70.h),
-    //     ),
-    //   );
-    //   return;
-    // }
+    // await openCameraAndGetImage(scanResult);
+    if ((scanResult.contains('-1')) ||
+        (scanResult.length != 7 && scanResult.length != 5)) return;
+    if ((scanResult.length != 5) && (scanResult.length != 7)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Center(child: Text('wrong parcode')),
+          duration: const Duration(seconds: 3),
+          margin: EdgeInsets.only(bottom: 70.h),
+        ),
+      );
+      return;
+    }
 
-    // final player = AudioPlayer();
-    // player.play(AssetSource('audio/store-scanner-beep-90395.mp3'));
-    // setState(() {
-    //   this.scanResult = scanResult;
-    // });
-    // if (!scanResult.contains('-1') && scanResult.length == 5) {
-    //   await openCameraAndGetImage(scanResult);
-    // }
-    // if (!scanResult.contains('-1') && scanResult.length == 7) {
-    //   await openCameraAndGetImage(scanResult);
-    // }
+    final player = AudioPlayer();
+    player.play(AssetSource('audio/store-scanner-beep-90395.mp3'));
+    setState(() {
+      this.scanResult = scanResult;
+    });
+    if (!scanResult.contains('-1') && scanResult.length == 5) {
+      await openCameraAndGetImage(scanResult);
+    }
+    if (!scanResult.contains('-1') && scanResult.length == 7) {
+      await openCameraAndGetImage(scanResult);
+    }
   } // end barcode function
 
   void showUploadCompleteSnackbar(int index) {
@@ -201,10 +209,31 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
           children: [
             homeUi(),
             if (_showButton) showMultibleFolders(),
-            if (_downloading)
+            if(_isPaused)
+            Positioned(
+              top: 30,
+              right: 25,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(.8),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: IconButton(
+                  icon: Icon(Icons.cached),
+                  onPressed: (){
+                    setState(() {
+                      _isPaused=false;
+                      uploadImageFolders(context);
+                    });
+                  },
+                  iconSize: 40,
+                  color: Colors.yellow,),
+              ),
+              ),
+            if (_downloading&&!_isPaused)
               Center(
                 child: Container(
-                  height: 150,
+                  height: 170,
                   width: double.infinity,
                   margin: EdgeInsets.symmetric(horizontal: 20),
                   decoration: BoxDecoration(
@@ -218,14 +247,17 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
                       children: [
                         Row(
                           children: [
-                            const SizedBox(width: 15,),
+                            const SizedBox(
+                              width: 15,
+                            ),
                             Text(
-                              'Downloading..',
+                              'uploading..',
                               style: TextStyle(fontSize: 16.sp),
                             ),
                             Text(
                               '$imageUploadedNumber/$numbereOfImages',
-                              style: TextStyle(fontSize: 15.sp, color: backColor),
+                              style:
+                                  TextStyle(fontSize: 15.sp, color: backColor),
                             ),
                           ],
                         ),
@@ -239,6 +271,19 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
                           backgroundColor: Colors.grey,
                           progressColor: backColor,
                         ),
+                        Row(
+                          children: [
+                            MaterialButton(
+                              color: _isPaused? Colors.red.withOpacity(.5):Colors.red,
+                              shape: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(20.0)),),
+                              onPressed: () {
+                                _isPaused=!_isPaused;
+                                setState(() {});
+                              },
+                              child: Text('Pause', style: const TextStyle(fontSize: 20, color: Colors.black),),
+                            )
+                          ],
+                        )
                       ],
                     ),
                   ),
@@ -306,19 +351,23 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
                                     fontSize: 14.sp),
                               ),
                               GestureDetector(
-                                onTap: () {
+                                onTap: () async {
                                   if (imageFolders.length == 1) {
-                                    setState(() {
-                                      _showButton = false;
-                                      _uploading = false;
-                                      imageFolders.clear();
-                                      numbereOfImages = 0;
-                                    });
+                                    bool isGoBack =
+                                        await _onBackPressed(context);
+                                    if (isGoBack) {
+                                      setState(() {
+                                        _downloading = false;
+                                        _showButton = false;
+                                        imageFolders.clear();
+                                        numbereOfImages = 0;
+                                      });
+                                    }
                                   } else if (imageFolders.length > 1) {
                                     setState(() {
-                                      imageFolders.remove(imageFolders[index]);
                                       numbereOfImages -=
                                           imageFolders[index].images.length;
+                                      imageFolders.remove(imageFolders[index]);
                                       print(
                                           'number of images: $numbereOfImages');
                                     });
@@ -434,7 +483,6 @@ class _HomeScannerPageState extends State<HomeScannerPage> {
                       onPressed: () {
                         setState(() {
                           _showButton = false;
-                          _uploading = false;
                           imageFolders.clear();
                         });
                       },
